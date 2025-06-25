@@ -1,11 +1,10 @@
 use core_foundation::{
-    array::{CFArrayGetCount, CFArrayGetValueAtIndex, CFArrayRef},
-    base::{CFRelease, CFTypeRef},
-    dictionary::{CFDictionaryGetValue, CFDictionaryRef},
-    string::{CFStringCreateWithCString, CFStringGetCString, CFStringRef, kCFStringEncodingUTF8},
+    array::{CFArray, CFArrayRef},
+    base::{CFType, CFTypeRef, TCFType},
+    dictionary::{CFDictionary, CFDictionaryGetValue, CFDictionaryRef},
+    string::{CFString, CFStringRef},
 };
-
-use std::{ffi::CStr, os::raw::c_void, ptr::null};
+use std::{os::raw::c_void, ptr::null, thread::sleep, time::Duration};
 
 #[link(name = "IOReport", kind = "dylib")]
 extern "C" {
@@ -46,102 +45,119 @@ extern "C" {
     fn IOReportStateGetResidency(item: CFDictionaryRef, index: i32) -> i64;
 }
 
-fn cfstring(s: &str) -> CFStringRef {
-    let cstr = std::ffi::CString::new(s).unwrap();
-    unsafe {
-        CFStringCreateWithCString(
-            null(),
-            cstr.as_ptr(),
-            kCFStringEncodingUTF8,
-        )
-    }
-}
-
-fn from_cfstring(s: CFStringRef) -> String {
-    unsafe {
-        let mut buf = [0u8; 256];
-        let ok = CFStringGetCString(
-            s,
-            buf.as_mut_ptr() as *mut i8,
-            buf.len() as isize,
-            kCFStringEncodingUTF8,
-        );
-        if ok == 0 {
-            "<invalid>".into()
-        } else {
-            let cstr = CStr::from_ptr(buf.as_ptr() as *const i8);
-            cstr.to_string_lossy().into()
-        }
-    }
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    unsafe {
-        let group = cfstring("GPU Stats");
-        let subgroup = cfstring("GPU Performance States");
+    // 1. Create CFString instances for group and subgroup identifiers
+    let group_cf    = CFString::new("GPU Stats");
+    let subgroup_cf = CFString::new("GPU Performance States");
 
-        let chans = IOReportCopyChannelsInGroup(group, subgroup, 0, 0, 0);
-        if chans.is_null() {
-            return Err("Failed to get channels".into());
+    // 2. Copy all channels in the specified group/subgroup
+    let chans_raw = unsafe {
+        IOReportCopyChannelsInGroup(
+            group_cf.as_concrete_TypeRef(),
+            subgroup_cf.as_concrete_TypeRef(),
+            0, 0, 0,
+        )
+    };
+    if chans_raw.is_null() {
+        return Err("Failed to get channels".into());
+    }
+    // Wrap the raw CFDictionaryRef under Create rule
+    let channels: CFDictionary<CFString, CFType> =
+        unsafe { CFDictionary::wrap_under_create_rule(chans_raw) };
+
+    // 3. Create a subscription to the selected channels
+    let mut sub_ref: CFDictionaryRef = null();
+    let subscription = unsafe {
+        IOReportCreateSubscription(
+            null(),
+            channels.as_concrete_TypeRef(),
+            &mut sub_ref,
+            0,
+            null(),
+        )
+    };
+    if subscription.is_null() {
+        return Err("Failed to create subscription".into());
+    }
+
+    // 4. Take two samples separated by a 1-second interval
+    let sample1 = unsafe { IOReportCreateSamples(subscription, channels.as_concrete_TypeRef(), null()) };
+    sleep(Duration::from_secs(1));
+    let sample2 = unsafe { IOReportCreateSamples(subscription, channels.as_concrete_TypeRef(), null()) };
+    // Compute the delta between the two samples
+    let delta_raw = unsafe { IOReportCreateSamplesDelta(sample1, sample2, null()) };
+    let delta: CFDictionary<CFString, CFType> =
+        unsafe { CFDictionary::wrap_under_create_rule(delta_raw) };
+
+    // 5. Extract the array of channel dictionaries from the delta
+    let key_cf = CFString::new("IOReportChannels");
+    let arr_ref: CFArrayRef = unsafe {
+        CFDictionaryGetValue(
+            delta.as_concrete_TypeRef(),
+            key_cf.as_concrete_TypeRef() as CFTypeRef,
+        ) as CFArrayRef
+    };
+    let channel_array: CFArray<CFDictionary<CFString, CFType>> =
+        unsafe { CFArray::wrap_under_get_rule(arr_ref) };
+
+    println!("GPU Residency (per frequency state):\n");
+
+    // 6. Iterate over each channel dictionary in the array
+    for dict_wrapper in channel_array.iter() {
+        let dict_ref = dict_wrapper.as_CFTypeRef() as CFDictionaryRef;
+        let dict: CFDictionary<CFString, CFType> =
+            unsafe { CFDictionary::wrap_under_get_rule(dict_ref) };
+
+        // Retrieve group, subgroup, and channel names
+        let grp_name = unsafe {
+            CFString::wrap_under_get_rule(IOReportChannelGetGroup(dict.as_concrete_TypeRef()))
+        }.to_string();
+        let subgrp_name = unsafe {
+            CFString::wrap_under_get_rule(IOReportChannelGetSubGroup(dict.as_concrete_TypeRef()))
+        }.to_string();
+        let ch_name = unsafe {
+            CFString::wrap_under_get_rule(IOReportChannelGetChannelName(dict.as_concrete_TypeRef()))
+        }.to_string();
+
+        // Filter out unwanted channels
+        if grp_name != "GPU Stats" || subgrp_name != "GPU Performance States" {
+            continue;
         }
 
-        let mut out: CFDictionaryRef = std::mem::zeroed();
-        let sub = IOReportCreateSubscription(null(), chans, &mut out, 0, null());
+        println!("{:<10} / {:<25} / {}", grp_name, subgrp_name, ch_name);
 
-        let s1 = IOReportCreateSamples(sub, chans, null());
-        std::thread::sleep(std::time::Duration::from_millis(1000));
-        let s2 = IOReportCreateSamples(sub, chans, null());
-        let delta = IOReportCreateSamplesDelta(s1, s2, null());
+        // Count and sum residency times for each performance state
+        let state_count = unsafe { IOReportStateGetCount(dict.as_concrete_TypeRef()) };
+        let mut total: i64  = 0;
+        let mut active: i64 = 0;
 
-        let key = cfstring("IOReportChannels");
-        let arr = CFDictionaryGetValue(delta, key as _) as CFArrayRef;
-        let count = CFArrayGetCount(arr);
+        for idx in 0..state_count {
+            let state_name = unsafe {
+                CFString::wrap_under_get_rule(
+                    IOReportStateGetNameForIndex(dict.as_concrete_TypeRef(), idx)
+                )
+            }.to_string();
+            let residency = unsafe { IOReportStateGetResidency(dict.as_concrete_TypeRef(), idx) };
 
-        println!("GPU Residency (per frequency state):\n");
-
-        for i in 0..count {
-            let item = CFArrayGetValueAtIndex(arr, i) as CFDictionaryRef;
-
-            let group = from_cfstring(IOReportChannelGetGroup(item));
-            let subgroup = from_cfstring(IOReportChannelGetSubGroup(item));
-            let name = from_cfstring(IOReportChannelGetChannelName(item));
-
-            if group != "GPU Stats" || subgroup != "GPU Performance States" {
-                continue;
+            println!("  {:>15}: {:>10} µs", state_name, residency);
+            total += residency;
+            // Accumulate only active states (exclude IDLE/OFF/DOWN)
+            if !state_name.contains("IDLE")
+                && !state_name.contains("OFF")
+                && !state_name.contains("DOWN")
+            {
+                active += residency;
             }
-
-            println!("{:<10} / {:<25} / {}", group, subgroup, name);
-
-            let state_count = IOReportStateGetCount(item);
-            let mut total = 0i64;
-            let mut active = 0i64;
-
-            for j in 0..state_count {
-                let sname = from_cfstring(IOReportStateGetNameForIndex(item, j));
-                let val = IOReportStateGetResidency(item, j);
-                println!("  {:>15}: {:>10} µs", sname, val);
-                total += val;
-                if !sname.contains("IDLE") && !sname.contains("OFF") && !sname.contains("DOWN") {
-                    active += val;
-                }
-            }
-
-            println!("  {:>15}: {:>10} µs (active)", "→ Total active", active);
-            println!("  {:>15}: {:>10} µs (total)", "→ Total", total);
-            println!(
-                "  {:>15}: {:>6.2} %\n",
-                "→ Usage",
-                (active as f64 / total.max(1) as f64) * 100.0
-            );
         }
 
-        // cleanup
-        CFRelease(group as _);
-        CFRelease(subgroup as _);
-        CFRelease(chans as _);
-        CFRelease(s1 as _);
-        CFRelease(s2 as _);
-        CFRelease(delta as _);
+        // Print summary statistics for each channel
+        println!("  {:>15}: {:>10} µs (active)", "→ Total active", active);
+        println!("  {:>15}: {:>10} µs (total)", "→ Total", total);
+        println!(
+            "  {:>15}: {:>6.2} %\n",
+            "→ Usage",
+            (active as f64 / total.max(1) as f64) * 100.0
+        );
     }
 
     Ok(())

@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 core-foundation = "0.10.1"
+core-foundation-sys = "0.8.7"
