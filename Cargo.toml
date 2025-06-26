@@ -1,8 +1,9 @@
 [package]
 name = "siligpu"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2021"
 
 [dependencies]
+clap = { version = "4.5.40", features = ["derive"] }
 core-foundation = "0.10.1"
 core-foundation-sys = "0.8.7"
