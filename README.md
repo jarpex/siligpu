@@ -2,15 +2,15 @@
 
 > 📊 A minimal Rust-based CLI tool for measuring Apple Silicon GPU usage in snapshot form using IOReport.
 
-`siligpu` queries the Apple Silicon GPU performance states and calculates the active usage percentage based on residency times.  
-It's a low-level, fast, no-dependency snapshot tool for developers and power users.
+`siligpu` queries the Apple Silicon GPU performance states and calculates the active usage percentage based on residency times. It's a low-level, fast, no-dependency snapshot tool for developers and power users.
 
 ---
 
 ## ✅ Features
 
 - 🔍 One-shot snapshot of GPU residency (not a live monitor)
-- 🍎 Designed for Apple Silicon Macs (M1, M2, M3…)
+- 🍎 Designed for Apple Silicon Macs (M1, M2, M3, M4…)
+- ⏱️ Customizable sampling interval with `-t, --time` (supports ms, s, m, h)
 - 📦 Uses low-level `IOReport` framework (no Metal dependency)
 - 🦀 Written in Rust
 - 🧩 Lightweight and fast
@@ -20,37 +20,54 @@ It's a low-level, fast, no-dependency snapshot tool for developers and power use
 ## 🚀 Usage
 
 ```bash
-siligpu
+siligpu [OPTIONS]
 ```
 
-### Example output:
+### Options
+
+| Flag                  | Description                                                                                           |
+| --------------------- | ----------------------------------------------------------------------------------------------------- |
+| `-v`, `--verbose`     | Verbose mode – show detailed performance states (default)                                             |
+| `-s`, `--summary`     | Summary mode – show one-line summary: `Usage: XX.XX%`                                                 |
+| `-q`, `--value-only`  | Quiet mode – output only the numeric value (e.g., `12.34%`)                                           |
+| `-t`, `--time <TIME>` | Time between samples. Accepts plain numbers (ms) or units: `ms`, `s`, `m`, `h`. Defaults to `1000ms`. |
+| `-h`, `--help`        | Print help information                                                                                |
+| `-V`, `--version`     | Print version information                                                                             |
+
+> **Time format examples:** `-t 500` (500ms), `-t 2s` (2 seconds), `--time 1m` (1 minute)
+
+---
+
+## 💡 Example
 
 ```bash
-GPU Residency (per frequency state):
+# Default (1 second interval, verbose)
+siligpu
 
-GPU Stats  / GPU Performance States    / GPUPH
-              OFF:   23840567 µs
-               P1:     150146 µs
-               P2:      50254 µs
-               P3:      79121 µs
-               P4:          0 µs
-               P5:      66550 µs
-               P6:          0 µs
-               P7:          0 µs
-               P8:          0 µs
-               P9:          0 µs
-              P10:          0 µs
-              P11:          0 µs
-              P12:          0 µs
-              P13:          0 µs
-              P14:          0 µs
-              P15:          0 µs
-   → Total active:     346071 µs (active)
-          → Total:   24186638 µs (total)
-          → Usage:   1.43 %
+# 500 ms interval, summary mode
+siligpu -t 500 -s
+
+# 2-second interval, value-only
+siligpu --time 2s -q
 ```
+
+### Example output (verbose)
+
+```bash
+GPU Stats  / GPU Performance States
+     OFF:             23840567 µs
+      P1:               150146 µs
+      P2:                50254 µs
+      P3:                79121 µs
+      ...
+    → Total active:     346071 µs (active)
+           → Total:   24186638 µs (total)
+           → Usage:       1.43 %
+```
+
+---
 
 ## 📦 Requirements
 
-- macOS
+- macOS (Big Sur 11.0 or later)
 - Apple Silicon (M1, M2, M3, M4...)

@@ -5,7 +5,13 @@ use core_foundation::{
     dictionary::{CFDictionary, CFDictionaryGetValue, CFDictionaryRef},
     string::{CFString, CFStringRef},
 };
-use std::{os::raw::c_void, ptr::null, thread::sleep, time::Duration};
+use std::{
+    error::Error,
+    os::raw::c_void,
+    ptr::null,
+    thread::sleep,
+    time::Duration,
+};
 
 #[derive(Parser)]
 #[command(
@@ -23,13 +29,18 @@ struct Args {
     #[arg(short = 'v', long = "verbose")]
     verbose: bool,
 
-    /// Summary mode – show one-line summary: Usage: XX.XX%
+    /// Summary mode – show one-line summary (e.g., "Usage: 10.25%")
     #[arg(short = 's', long = "summary")]
     summary: bool,
 
-    /// Quiet mode – output only the numeric value (e.g., 12.34%)
+    /// Quiet mode – output only the numeric value (e.g., "12.34%")
     #[arg(short = 'q', long = "value-only")]
     value_only: bool,
+
+    /// Time between samples
+    /// Accepts plain numbers (ms) or units: ms, s, m, h. (e.g. `100`, `100ms`, `1s`, `1m`, `1h`).
+    #[arg(short = 't', long = "time", default_value = "1000ms")]
+    time: String,
 }
 
 enum Mode {
@@ -38,7 +49,29 @@ enum Mode {
     ValueOnly,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// Parse strings like "100", "100ms", "1s", "1m", "1h" into a `Duration`.
+fn parse_time_arg(s: &str) -> Result<Duration, Box<dyn Error>> {
+    let s = s.trim();
+    if let Some(num) = s.strip_suffix("ms") {
+        let ms: u64 = num.parse()?;
+        Ok(Duration::from_millis(ms))
+    } else if let Some(num) = s.strip_suffix('s') {
+        let secs: u64 = num.parse()?;
+        Ok(Duration::from_secs(secs))
+    } else if let Some(num) = s.strip_suffix('m') {
+        let mins: u64 = num.parse()?;
+        Ok(Duration::from_secs(mins * 60))
+    } else if let Some(num) = s.strip_suffix('h') {
+        let hours: u64 = num.parse()?;
+        Ok(Duration::from_secs(hours * 3600))
+    } else {
+        // No unit → milliseconds
+        let ms: u64 = s.parse()?;
+        Ok(Duration::from_millis(ms))
+    }
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let mode = if args.summary {
         Mode::Summary
@@ -47,6 +80,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         Mode::Verbose
     };
+
+    // Parse the user-provided interval (or use 1000 ms by default)
+    let sample_interval = parse_time_arg(&args.time)
+        .map_err(|e| format!("Invalid time '{}': {}", args.time, e))?;
 
     // 1. Create CFString instances for group and subgroup identifiers
     let group_cf = CFString::new("GPU Stats");
@@ -83,9 +120,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("Failed to create subscription".into());
     }
 
-    // 4. Take two samples separated by a 1-second interval
+    // 4. Take two samples separated by the user-defined interval
     let sample1 = unsafe { IOReportCreateSamples(subscription, channels.as_concrete_TypeRef(), null()) };
-    sleep(Duration::from_secs(1));
+    sleep(sample_interval);
     let sample2 = unsafe { IOReportCreateSamples(subscription, channels.as_concrete_TypeRef(), null()) };
     let delta_raw = unsafe { IOReportCreateSamplesDelta(sample1, sample2, null()) };
     let delta: CFDictionary<CFString, CFType> =
@@ -114,10 +151,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .to_string();
         let subgrp_name = unsafe {
             CFString::wrap_under_get_rule(IOReportChannelGetSubGroup(dict.as_concrete_TypeRef()))
-        }
-        .to_string();
-        let _ch_name = unsafe {
-            CFString::wrap_under_get_rule(IOReportChannelGetChannelName(dict.as_concrete_TypeRef()))
         }
         .to_string();
 
@@ -152,7 +185,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match mode {
             Mode::Verbose => {
-                // Re-run detailed printout
                 println!("{:>0} / {:<0}", grp_name, subgrp_name);
                 for idx in 0..state_count {
                     let state_name = unsafe {
@@ -213,7 +245,6 @@ extern "C" {
 
     fn IOReportChannelGetGroup(item: CFDictionaryRef) -> CFStringRef;
     fn IOReportChannelGetSubGroup(item: CFDictionaryRef) -> CFStringRef;
-    fn IOReportChannelGetChannelName(item: CFDictionaryRef) -> CFStringRef;
 
     fn IOReportStateGetCount(item: CFDictionaryRef) -> i32;
     fn IOReportStateGetNameForIndex(item: CFDictionaryRef, index: i32) -> CFStringRef;
