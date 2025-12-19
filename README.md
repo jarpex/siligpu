@@ -9,11 +9,24 @@
 ## ✅ Features
 
 - 🔍 One-shot snapshot of GPU residency (not a live monitor)
-- 🍎 Designed for Apple Silicon Macs (M1, M2, M3, M4…)
+- 🍎 Designed for Apple Silicon Macs (M1, M2, M3, M4, M5…)
 - ⏱️ Customizable sampling interval with `-t, --time` (supports ms, s, m, h)
 - 📦 Uses low-level `IOReport` framework (no Metal dependency)
 - 🦀 Written in Rust
 - 🧩 Lightweight and fast
+- 📄 JSON output support for easy parsing
+
+---
+
+## 📦 Installation
+
+### From Source
+
+```bash
+git clone https://github.com/jarpex/siligpu.git
+cd siligpu
+cargo install --path .
+```
 
 ---
 
@@ -30,6 +43,7 @@ siligpu [OPTIONS]
 | `-v`, `--verbose`     | Verbose mode – show detailed performance states (default)                                             |
 | `-s`, `--summary`     | Summary mode – show one-line summary: `Usage: XX.XX%`                                                 |
 | `-q`, `--value-only`  | Quiet mode – output only the numeric value (e.g., `12.34%`)                                           |
+| `-j`, `--json`        | JSON mode – output results in JSON format                                                             |
 | `-t`, `--time <TIME>` | Time between samples. Accepts plain numbers (ms) or units: `ms`, `s`, `m`, `h`. Defaults to `1000ms`. |
 | `-h`, `--help`        | Print help information                                                                                |
 | `-V`, `--version`     | Print version information                                                                             |
@@ -49,6 +63,9 @@ siligpu -t 500 -s
 
 # 2-second interval, value-only
 siligpu --time 2s -q
+
+# JSON output
+siligpu --json
 ```
 
 ### Example output (verbose)
@@ -65,9 +82,43 @@ GPU Stats  / GPU Performance States
            → Usage:       1.43 %
 ```
 
+### Example output (JSON)
+
+```json
+{
+  "usage_percentage": 1.43,
+  "total_active_us": 346071,
+  "total_time_us": 24186638,
+  "states": [
+    {
+      "name": "OFF",
+      "residency": 23840567,
+      "is_active": false
+    },
+    {
+      "name": "P1",
+      "residency": 150146,
+      "is_active": true
+    }
+  ]
+}
+```
+
 ---
 
 ## 📦 Requirements
 
 - macOS (Big Sur 11.0 or later)
-- Apple Silicon (M1, M2, M3, M4...)
+- Apple Silicon (M1, M2, M3, M4, M5...)
+
+> On unsupported hardware (e.g., Intel Macs or older macOS versions), `siligpu` will exit with an error explaining that GPU performance states are unavailable instead of crashing.
+
+---
+
+## 🧪 Testing
+
+```bash
+cargo test
+```
+
+Tests cover the duration parser, GPU channel math, and error handling for invalid input.

@@ -1,9 +1,18 @@
 [package]
 name = "siligpu"
-version = "0.1.3"
+version = "1.0.0"
 edition = "2021"
+description = "Snapshot Apple Silicon GPU usage via IOReport"
+license = "MIT"
+repository = "https://github.com/jarpex/siligpu"
+readme = "README.md"
+keywords = ["gpu", "apple-silicon", "macos", "cli", "ioreport"]
+categories = ["command-line-utilities", "hardware-support"]
 
 [dependencies]
-clap = { version = "4.5.40", features = ["derive"] }
+anyhow = "1.0.100"
+clap = { version = "4.5.53", features = ["derive"] }
 core-foundation = "0.10.1"
 core-foundation-sys = "0.8.7"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
