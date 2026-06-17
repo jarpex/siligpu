@@ -26,7 +26,7 @@ Install via Homebrew (tap required):
 
 ```bash
 # Add the tap
-brew tap jarpex/formulaes https://github.com/jarpex/homebrew-formulaes
+brew tap jarpex/formulaes https://github.com/jarpex/homebrew-formulae
 
 # Install the CLI
 brew install siligpu
