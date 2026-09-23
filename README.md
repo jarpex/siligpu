@@ -80,13 +80,13 @@ siligpu --json
 
 ```bash
 GPU Stats  / GPU Performance States
-     OFF:             23840567 µs
-      P1:               150146 µs
-      P2:                50254 µs
-      P3:                79121 µs
+     OFF:               993356 µs
+      P1:                 6256 µs
+      P2:                 2093 µs
+      P3:                 3296 µs
       ...
-    → Total active:     346071 µs (active)
-           → Total:   24186638 µs (total)
+    → Total active:      14420 µs (active)
+           → Total:    1007776 µs (total)
            → Usage:       1.43 %
 ```
 
@@ -95,17 +95,17 @@ GPU Stats  / GPU Performance States
 ```json
 {
   "usage_percentage": 1.43,
-  "total_active_us": 346071,
-  "total_time_us": 24186638,
+  "total_active_us": 14419,
+  "total_time_us": 1007776,
   "states": [
     {
       "name": "OFF",
-      "residency": 23840567,
+      "residency": 993356,
       "is_active": false
     },
     {
       "name": "P1",
-      "residency": 150146,
+      "residency": 6256,
       "is_active": true
     }
   ]

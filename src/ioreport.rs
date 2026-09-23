@@ -200,6 +200,13 @@ impl IOReport {
             }
             .to_string();
 
+            let unit = unsafe {
+                CFString::wrap_under_get_rule(IOReportChannelGetUnitLabel(
+                    dict.as_concrete_TypeRef(),
+                ))
+            }
+            .to_string();
+
             let state_count = unsafe { IOReportStateGetCount(dict.as_concrete_TypeRef()) };
             let mut states = Vec::new();
 
@@ -211,8 +218,17 @@ impl IOReport {
                     ))
                 }
                 .to_string();
-                let residency =
+                let raw_residency =
                     unsafe { IOReportStateGetResidency(dict.as_concrete_TypeRef(), idx) };
+                
+                // Convert 24Mticks to microseconds (1 tick = 1/24 µs)
+                // For unknown units, use raw value as-is (still a time metric)
+                let residency = if unit.trim() == "24Mticks" {
+                    raw_residency / 24
+                } else {
+                    raw_residency
+                };
+                
                 let upper_state = state_name.to_ascii_uppercase();
                 let is_active = !upper_state.contains("IDLE")
                     && !upper_state.contains("OFF")
@@ -278,6 +294,7 @@ extern "C" {
 
     fn IOReportChannelGetGroup(item: CFDictionaryRef) -> CFStringRef;
     fn IOReportChannelGetSubGroup(item: CFDictionaryRef) -> CFStringRef;
+    fn IOReportChannelGetUnitLabel(item: CFDictionaryRef) -> CFStringRef;
 
     fn IOReportStateGetCount(item: CFDictionaryRef) -> i32;
     fn IOReportStateGetNameForIndex(item: CFDictionaryRef, index: i32) -> CFStringRef;
