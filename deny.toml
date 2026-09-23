@@ -7,6 +7,16 @@ all-features = true
 [advisories]
 version = 2
 ignore = []
+vulnerability = "deny"
+unsound = "deny"
+unmaintained = "warn"
+yanked = "warn"
+notice = "warn"
+
+# Example
+# [[advisories.ignore]]
+# id = "RUSTSEC-YYYY-XXXX"
+# reason = "something..."
 
 [licenses]
 version = 2
