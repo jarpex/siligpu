@@ -94,21 +94,36 @@ GPU Stats  / GPU Performance States
 
 ```json
 {
-  "usage_percentage": 1.43,
-  "total_active_us": 14419,
-  "total_time_us": 1007776,
   "states": [
     {
       "name": "OFF",
-      "residency": 993356,
+      "residency_micros": 993356,
       "is_active": false
     },
     {
       "name": "P1",
-      "residency": 6256,
+      "residency_micros": 6256,
+      "is_active": true
+    },
+    {
+      "name": "P2",
+      "residency_micros": 2093,
+      "is_active": true
+    },
+    {
+      "name": "P3",
+      "residency_micros": 3296,
+      "is_active": true
+    },
+    {
+      "name": "P4",
+      "residency_micros": 2775,
       "is_active": true
     }
-  ]
+  ],
+  "total_active_micros": 14420,
+  "total_time_micros": 1007776,
+  "usage_percentage": 1.43
 }
 ```
 

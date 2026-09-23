@@ -13,6 +13,8 @@ use std::{fmt, os::raw::c_void, ptr::null};
 pub struct GPUState {
     /// The name of the state (e.g., "P1", "IDLE").
     pub name: String,
+    /// Specify the format for readability
+    #[serde(rename = "residency_micros")]
     /// The time spent in this state in microseconds.
     pub residency: i64,
     /// Whether this state is considered "active" (i.e., not IDLE, OFF, or DOWN).

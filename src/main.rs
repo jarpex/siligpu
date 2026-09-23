@@ -77,8 +77,8 @@ fn main() -> Result<()> {
         if args.json {
             let json_output = serde_json::json!({
                 "usage_percentage": usage,
-                "total_active_us": channel.active_residency(),
-                "total_time_us": channel.total_residency(),
+                "total_active_micros": channel.active_residency(),
+                "total_time_micros": channel.total_residency(),
                 "states": channel.states
             });
             println!("{}", serde_json::to_string_pretty(&json_output)?);
