@@ -13,5 +13,10 @@ licenses:
 clean-licenses:
     rm -f THIRD_PARTY_LICENSES.html
 
-compliance: 
-    licenses
+check-licenses:
+    cargo deny check licenses bans sources
+
+check-advisories:
+    cargo deny check advisories
+
+compliance: check-licenses check-advisories licenses
