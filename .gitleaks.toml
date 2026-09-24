@@ -1,0 +1,19 @@
+title = "siligpu gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Exclude generated artifacts"
+paths = [
+    '''sbom/''',
+    '''target/''',
+    '''\.git/''',
+]
+
+[[rules]]
+id = "generic-password"
+description = "Generic password in config"
+regex = '''(?i)(password|passwd|pwd)\s*[:=]\s*["']?([a-zA-Z0-9!@#$%^&*_\-]{8,})["']?'''
+severity = "medium"
+tags = ["password"]

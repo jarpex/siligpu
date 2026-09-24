@@ -7,11 +7,8 @@ all-features = true
 [advisories]
 version = 2
 ignore = []
-vulnerability = "deny"
-unsound = "deny"
-unmaintained = "warn"
+unmaintained = "transitive"
 yanked = "warn"
-notice = "warn"
 
 # Example
 # [[advisories.ignore]]

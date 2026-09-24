@@ -10,7 +10,7 @@ keywords = ["gpu", "apple-silicon", "macos", "cli", "ioreport"]
 categories = ["command-line-utilities", "hardware-support"]
 
 [dependencies]
-anyhow = "1.0.100"
+anyhow = "1.0.104"
 clap = { version = "4.5.53", features = ["derive"] }
 core-foundation = "0.10.1"
 core-foundation-sys = "0.8.7"
