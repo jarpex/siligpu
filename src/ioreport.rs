@@ -309,3 +309,46 @@ extern "C" {
     fn IOReportStateGetNameForIndex(item: CFDictionaryRef, index: i32) -> CFStringRef;
     fn IOReportStateGetResidency(item: CFDictionaryRef, index: i32) -> i64;
 }
+
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    fn arb_gpu_state() -> impl Strategy<Value = GPUState> {
+        ("[a-zA-Z0-9]{1,10}", 0..10_000_000i64, any::<bool>()).prop_map(
+            |(name, residency, is_active)| GPUState {
+                name,
+                residency,
+                is_active,
+            },
+        )
+    }
+
+    proptest! {
+        #[test]
+        fn test_channel_math_invariants(
+            states in prop::collection::vec(arb_gpu_state(), 0..10)
+        ) {
+            let channel = GPUChannel {
+                group: "FuzzGroup".into(),
+                subgroup: "FuzzSubgroup".into(),
+                states,
+            };
+
+            let total = channel.total_residency();
+            let active = channel.active_residency();
+
+            prop_assert!(active <= total,
+                "Active {} > Total {}", active, total);
+
+            let usage = channel.usage();
+            prop_assert!(usage >= 0.0, "Usage < 0: {}", usage);
+            prop_assert!(usage <= 100.0, "Usage > 100: {}", usage);
+
+            if total == 0 {
+                prop_assert_eq!(usage, 0.0);
+            }
+        }
+    }
+}

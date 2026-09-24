@@ -71,3 +71,6 @@ vex-merge:
 
 vex-list:
     @ls -1 vex/statements/*.vex.json 2>/dev/null || echo "No VEX documents found"
+
+test-props:
+    cargo test --lib proptests -- --nocapture
