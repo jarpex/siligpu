@@ -74,3 +74,9 @@ vex-list:
 
 test-props:
     cargo test --lib proptests -- --nocapture
+
+fuzz-parse time="60":
+    cargo fuzz run fuzz_parse_duration -- -max_total_time={{time}}
+
+fuzz-build:
+    cargo fuzz build
