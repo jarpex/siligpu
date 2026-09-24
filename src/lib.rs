@@ -55,6 +55,8 @@ pub enum ParseDurationError {
     InvalidNumber,
     /// The unit was not recognized (e.g., `1x`).
     UnsupportedUnit(String),
+    /// The value is too large and would overflow internal arithmetic.
+    Overflow,
 }
 
 impl fmt::Display for ParseDurationError {
@@ -65,6 +67,7 @@ impl fmt::Display for ParseDurationError {
             Self::UnsupportedUnit(unit) => {
                 write!(f, "Unsupported duration unit: {unit}")
             }
+            Self::Overflow => write!(f, "Duration value is too large"),
         }
     }
 }
@@ -81,9 +84,17 @@ pub fn parse_duration(s: &str) -> Result<Duration, ParseDurationError> {
 
     let normalized = s.to_ascii_lowercase();
 
-    let parse_num = |num: &str| {
-        num.parse::<u64>()
-            .map_err(|_| ParseDurationError::InvalidNumber)
+    let parse_num = |num: &str| -> Result<u64, ParseDurationError> {
+        num.parse::<u64>().map_err(|e: std::num::ParseIntError| {
+            if matches!(
+                e.kind(),
+                &std::num::IntErrorKind::PosOverflow | &std::num::IntErrorKind::NegOverflow
+            ) {
+                ParseDurationError::Overflow
+            } else {
+                ParseDurationError::InvalidNumber
+            }
+        })
     };
 
     if let Some(num) = normalized.strip_suffix("ms") {
@@ -91,14 +102,62 @@ pub fn parse_duration(s: &str) -> Result<Duration, ParseDurationError> {
     } else if let Some(num) = normalized.strip_suffix('s') {
         Ok(Duration::from_secs(parse_num(num)?))
     } else if let Some(num) = normalized.strip_suffix('m') {
-        Ok(Duration::from_secs(parse_num(num)? * 60))
+        let secs = parse_num(num)?
+            .checked_mul(60)
+            .ok_or(ParseDurationError::Overflow)?;
+        Ok(Duration::from_secs(secs))
     } else if let Some(num) = normalized.strip_suffix('h') {
-        Ok(Duration::from_secs(parse_num(num)? * 3600))
+        let secs = parse_num(num)?
+            .checked_mul(3600)
+            .ok_or(ParseDurationError::Overflow)?;
+        Ok(Duration::from_secs(secs))
     } else {
         if normalized.chars().any(|c| c.is_ascii_alphabetic()) {
             return Err(ParseDurationError::UnsupportedUnit(normalized));
         }
 
         Ok(Duration::from_millis(parse_num(&normalized)?))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_duration() {
+        assert_eq!(parse_duration("100ms").unwrap(), Duration::from_millis(100));
+        assert_eq!(parse_duration("1s").unwrap(), Duration::from_secs(1));
+        assert_eq!(parse_duration("1m").unwrap(), Duration::from_secs(60));
+        assert_eq!(parse_duration("1h").unwrap(), Duration::from_secs(3600));
+        assert_eq!(parse_duration("500").unwrap(), Duration::from_millis(500));
+        assert!(parse_duration("invalid").is_err());
+    }
+
+    /// Fuzzing regression test for "9949999995111111111M" resulting in `attempt to multiply with overflow`.
+    #[test]
+    fn test_fuzz_regression_overflow_minutes() {
+        let result = parse_duration("9949999995111111111M");
+        assert_eq!(result, Err(ParseDurationError::Overflow));
+    }
+
+    #[test]
+    fn test_overflow_all_units() {
+        let huge = format!("{}m", u64::MAX);
+        assert_eq!(parse_duration(&huge), Err(ParseDurationError::Overflow));
+
+        let huge_hours = format!("{}h", u64::MAX);
+        assert_eq!(
+            parse_duration(&huge_hours),
+            Err(ParseDurationError::Overflow)
+        );
+
+        assert_eq!(
+            parse_duration("3074457345618258603m"),
+            Err(ParseDurationError::Overflow)
+        );
+
+        let max_ms = format!("{}ms", u64::MAX);
+        assert!(parse_duration(&max_ms).is_ok());
     }
 }
