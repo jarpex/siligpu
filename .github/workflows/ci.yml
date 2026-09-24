@@ -1,0 +1,172 @@
+name: CI Validation + Security Scan
+
+on:
+  push:
+    branches: [dev, master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      skip_build:
+        description: 'no binary verification'
+        required: false
+        default: 'false'
+        type: boolean
+
+permissions:
+  contents: read
+  security-events: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  validate:
+    name: Validate (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo tools (pre-built binaries)
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-cyclonedx,clippy-sarif,sarif-fmt
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Run Clippy (SAST) → SARIF
+        run: |
+          mkdir -p sbom
+          ./scripts/clippy-sarif.sh sbom/clippy.sarif
+
+      - name: Run unit tests
+        run: cargo test --all-features
+
+      - name: Run property-based tests
+        run: cargo test --lib proptests -- --nocapture
+
+      - name: Build release binary
+        if: ${{ github.event_name == 'push' || !fromJSON(inputs.skip_build) }}
+        run: cargo build --release
+
+      - name: Generate SBOM (CycloneDX)
+        run: |
+          mkdir -p sbom
+          cargo cyclonedx --override-filename bom --format json
+          mv bom.json sbom/
+          ./scripts/clean-sbom.sh sbom/bom.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom/bom.json
+          retention-days: 30
+
+      - name: Upload Clippy SARIF
+        uses: actions/upload-artifact@v4
+        with:
+          name: sarif-clippy
+          path: sbom/clippy.sarif
+          retention-days: 30
+
+      - name: Upload Clippy SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: sbom/clippy.sarif
+          category: clippy
+
+  scan:
+    name: Security Scan (Linux)
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install security tools (pre-built binaries)
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit,cargo-deny
+
+      - name: Install gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar -xz
+          sudo mv gitleaks /usr/local/bin/
+
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Download SBOM from validate job
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom
+          path: sbom
+
+      - name: Run cargo audit → SARIF
+        run: |
+          mkdir -p sbom
+          cargo audit --format sarif > sbom/cargo-audit.sarif
+
+      - name: Run cargo audit (gate)
+        run: cargo audit --deny warnings
+
+      - name: Run gitleaks → SARIF
+        run: |
+          mkdir -p sbom
+          gitleaks detect --source . --report-format sarif --report-path sbom/gitleaks.sarif --no-git --log-level warn
+
+      - name: Run cargo deny
+        run: cargo deny check licenses bans sources
+
+      - name: Run Trivy scan on SBOM → SARIF
+        run: |
+          mkdir -p sbom
+          VEX_FLAG=""
+          if [ -f vex/siligpu.vex.json ]; then
+            VEX_FLAG="--vex vex/siligpu.vex.json"
+          fi
+          trivy sbom sbom/bom.json \
+            --scanners vuln,license \
+            --format sarif \
+            --output sbom/trivy-vuln.sarif \
+            --severity HIGH,CRITICAL \
+            --disable-telemetry \
+            --quiet $VEX_FLAG
+
+      - name: Upload all SARIF reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: sarif-reports
+          path: |
+            sbom/cargo-audit.sarif
+            sbom/gitleaks.sarif
+            sbom/trivy-vuln.sarif
+          retention-days: 30
+
+      - name: Upload SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: sbom/
+          category: security-scans

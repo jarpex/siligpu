@@ -311,6 +311,7 @@ extern "C" {
 }
 
 #[cfg(test)]
+#[allow(clippy::result_large_err, clippy::float_cmp)]
 mod proptests {
     use super::*;
     use proptest::prelude::*;

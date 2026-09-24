@@ -121,6 +121,7 @@ pub fn parse_duration(s: &str) -> Result<Duration, ParseDurationError> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

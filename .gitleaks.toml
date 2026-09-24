@@ -10,6 +10,7 @@ paths = [
     '''target/''',
     '''\.git/''',
     '''THIRD_PARTY_LICENSES\.html''',
+    '''README.md''',
 ]
 
 [[rules]]

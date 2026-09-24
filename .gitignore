@@ -1,3 +1,4 @@
 /sbom/
 /target/
 .DS_Store
+.github/workflows/*.log
