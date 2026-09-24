@@ -25,13 +25,10 @@ audit-sarif:
     mkdir -p sbom
     cargo audit --format sarif > sbom/cargo-audit.sarif
 
-sca-rust:
-    mkdir -p sbom
-    cargo audit --format sarif > sbom/cargo-audit.sarif
 
 sca-general: sbom
     mkdir -p sbom
-    trivy sbom sbom/bom.json --scanners vuln,license --format sarif --output sbom/trivy-vuln.sarif --severity HIGH,CRITICAL --disable-telemetry --quiet
+    ./scripts/trivy-scan.sh sbom/bom.json sbom/trivy-vuln.sarif
 
 scan: audit-sarif audit-gate sca-general secrets
 
@@ -45,3 +42,21 @@ check-licenses:
     cargo deny check licenses bans sources
 
 compliance: check-licenses scan licenses
+
+vex-create vuln subcomponent justification statement:
+    mkdir -p vex/statements
+    vexctl create \
+      --product "pkg:cargo/siligpu@1.0.0" \
+      --subcomponents "pkg:cargo/{{subcomponent}}" \
+      --vuln "{{vuln}}" \
+      --status "not_affected" \
+      --justification "{{justification}}" \
+      --impact-statement "{{statement}}" \
+      --file "vex/statements/siligpu-{{vuln}}.vex.json"
+    @just vex-merge
+
+vex-merge:
+    vexctl merge vex/statements/*.vex.json > vex/siligpu.vex.json
+
+vex-list:
+    @ls -1 vex/statements/*.vex.json 2>/dev/null || echo "No VEX documents found"

@@ -6,7 +6,6 @@ all-features = true
 
 [advisories]
 version = 2
-ignore = []
 unmaintained = "transitive"
 yanked = "warn"
 
