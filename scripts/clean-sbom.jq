@@ -34,11 +34,11 @@ walk(
 
 | .dependencies = (.dependencies // [] | map(
     if (.ref | startswith("path+file://.")) then
-      .ref = "pkg:cargo/siligpu@1.0.0"
+      .ref = "pkg:cargo/siligpu@" + $version
     else . end
     | .dependsOn = (.dependsOn // [] | map(
         if startswith("path+file://.") then
-          "pkg:cargo/siligpu@1.0.0"
+          "pkg:cargo/siligpu@" + $version
         else . end
       ))
   ))
