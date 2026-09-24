@@ -30,7 +30,18 @@ sca-general: sbom
     mkdir -p sbom
     ./scripts/trivy-scan.sh sbom/bom.json sbom/trivy-vuln.sarif
 
-scan: audit-sarif audit-gate sca-general secrets
+sast:
+    mkdir -p sbom
+    ./scripts/clippy-sarif.sh sbom/clippy.sarif
+
+scan: fmt-check audit-sarif audit-gate sca-general secrets sast
+
+fmt:
+    cargo fmt
+
+fmt-check:
+    cargo fmt --check
+
 
 licenses:
     cargo about generate about.hbs -o THIRD_PARTY_LICENSES.html

@@ -1,12 +1,46 @@
+#![deny(
+    clippy::all,
+    clippy::pedantic,
+    clippy::correctness,
+    clippy::suspicious,
+    clippy::complexity,
+    clippy::perf,
+    clippy::style,
+    clippy::panic,
+    clippy::todo,
+    clippy::unimplemented,
+    warnings,
+    missing_debug_implementations,
+    unreachable_pub,
+    rust_2018_idioms,
+    unused_lifetimes,
+    non_ascii_idents
+)]
+#![warn(clippy::nursery, clippy::cargo)]
+#![allow(
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::struct_excessive_bools,
+    clippy::multiple_crate_versions,
+    clippy::module_name_repetitions,
+    clippy::missing_errors_doc,
+    clippy::doc_markdown,
+    clippy::must_use_candidate,
+    clippy::wildcard_imports,
+    clippy::option_if_let_else
+)]
+
 use anyhow::{Context, Result};
 use clap::{ArgGroup, Parser};
 use std::thread::sleep;
 use std::time::Duration;
 
-use siligpu::parse_duration;
 use siligpu::ioreport::IOReport;
+use siligpu::parse_duration;
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[command(
     name = "siligpu",
     about = "Apple Silicon GPU Usage Display Utility for macOS",
@@ -45,7 +79,7 @@ fn main() -> Result<()> {
     let args = Args::parse();
 
     let report = IOReport::new("GPU Stats", "GPU Performance States")
-        .map_err(|e| anyhow::anyhow!(e))
+        .map_err(anyhow::Error::from)
         .context("Failed to initialize IOReport. Are you running on an Apple Silicon Mac?")?;
 
     let sample1 = report
@@ -83,9 +117,9 @@ fn main() -> Result<()> {
             });
             println!("{}", serde_json::to_string_pretty(&json_output)?);
         } else if args.value_only {
-            println!("{:.2}%", usage);
+            println!("{usage:.2}%");
         } else if args.summary {
-            println!("Usage: {:>6.2}%", usage);
+            println!("Usage: {usage:>6.2}%");
         } else {
             // Verbose (default)
             println!("{:>0} / {:<0}", channel.group, channel.subgroup);

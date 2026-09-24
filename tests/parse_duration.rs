@@ -1,8 +1,8 @@
 // Integration tests for the CLI duration parser.
 // Makes use of the crate's `parse_duration` helper.
 
-use std::time::Duration;
 use siligpu::{parse_duration, ParseDurationError};
+use std::time::Duration;
 
 #[test]
 fn integration_parse_duration_various() {
