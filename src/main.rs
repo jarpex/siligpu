@@ -115,6 +115,11 @@ fn print_channel(channel: &GPUChannel, args: &Args) -> Result<()> {
 fn main() -> Result<()> {
     let args = Args::parse();
 
+    anyhow::ensure!(
+        !args.time.is_zero(),
+        "Sampling interval must be greater than zero. Try -t 1ms or more."
+    );
+
     let report = IOReport::new(GROUP, SUBGROUP)
         .context("Failed to initialize IOReport. Are you running on an Apple Silicon Mac?")?;
 
