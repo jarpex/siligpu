@@ -98,7 +98,7 @@ GPU Stats / GPU Performance States
 **Summary** (`-s`):
 
 ```bash
-Usage:   1.64%
+Usage: 1.64%
 ```
 
 **JSON** (`-j`):

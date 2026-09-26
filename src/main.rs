@@ -90,7 +90,7 @@ fn print_channel(channel: &GPUChannel, args: &Args) -> Result<()> {
     } else if args.value_only {
         println!("{usage:.2}%");
     } else if args.summary {
-        println!("Usage: {usage:>6.2}%");
+        println!("Usage: {usage:.2}%");
     } else {
         println!("{} / {}", channel.group, channel.subgroup);
         for state in &channel.states {
