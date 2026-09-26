@@ -8,37 +8,29 @@ use core_foundation_sys::base::CFRelease;
 use serde::Serialize;
 use std::{fmt, os::raw::c_void, ptr};
 
-/// Represents a single GPU performance state (e.g., "P1", "IDLE").
+/// A single GPU performance state.
 #[derive(Debug, Serialize)]
 pub struct GPUState {
-    /// The name of the state (e.g., "P1", "IDLE").
     pub name: String,
-    /// Specify the format for readability
     #[serde(rename = "residency_micros")]
     pub residency: i64,
-    /// Whether this state is considered "active" (i.e., not IDLE, OFF, or DOWN).
     pub is_active: bool,
 }
 
-/// Represents a channel of GPU statistics, containing multiple states.
+/// A channel of GPU statistics containing multiple states.
 #[derive(Debug, Serialize)]
 pub struct GPUChannel {
-    /// The group name (e.g., "GPU Stats").
     pub group: String,
-    /// The subgroup name (e.g., "GPU Performance States").
     pub subgroup: String,
-    /// The list of performance states in this channel.
     pub states: Vec<GPUState>,
 }
 
 impl GPUChannel {
-    /// Calculates the total residency time across all states in this channel.
     #[must_use]
     pub fn total_residency(&self) -> i64 {
         self.states.iter().map(|s| s.residency).sum()
     }
 
-    /// Calculates the total residency time for active states only.
     #[must_use]
     pub fn active_residency(&self) -> i64 {
         self.states
@@ -61,7 +53,7 @@ impl GPUChannel {
     }
 }
 
-/// A wrapper around the IOReport library for querying system statistics.
+/// A wrapper around the IOReport library.
 pub struct IOReport {
     subscription: IOReportSubscriptionRef,
     channels: CFDictionary<CFString, CFType>,
@@ -100,8 +92,23 @@ impl fmt::Display for IOReportError {
 
 impl std::error::Error for IOReportError {}
 
-// Opaque type for the subscription
 type IOReportSubscriptionRef = *const c_void;
+
+unsafe fn cf_string_to_string(ptr: CFStringRef) -> String {
+    if ptr.is_null() {
+        String::new()
+    } else {
+        CFString::wrap_under_get_rule(ptr).to_string()
+    }
+}
+
+fn contains_ignore_case(haystack: &str, needle: &str) -> bool {
+    let needle = needle.as_bytes();
+    haystack
+        .as_bytes()
+        .windows(needle.len())
+        .any(|w| w.eq_ignore_ascii_case(needle))
+}
 
 impl IOReport {
     /// Creates a new subscription for the requested IOReport group and subgroup.
@@ -136,6 +143,13 @@ impl IOReport {
                 ptr::null(),
             )
         };
+
+        // Release the merged channels dictionary if created
+        if !sub_ref.is_null() {
+            unsafe {
+                CFRelease(sub_ref as CFTypeRef);
+            }
+        }
 
         if subscription.is_null() {
             return Err(IOReportError::SubscriptionFailed);
@@ -206,41 +220,29 @@ impl IOReport {
         for dict in channel_array.iter() {
             let dict_ref = dict.as_concrete_TypeRef();
 
-            let grp_name =
-                unsafe { CFString::wrap_under_get_rule(IOReportChannelGetGroup(dict_ref)) }
-                    .to_string();
-
-            let subgrp_name =
-                unsafe { CFString::wrap_under_get_rule(IOReportChannelGetSubGroup(dict_ref)) }
-                    .to_string();
-
-            let unit =
-                unsafe { CFString::wrap_under_get_rule(IOReportChannelGetUnitLabel(dict_ref)) }
-                    .to_string();
+            let grp_name = unsafe { cf_string_to_string(IOReportChannelGetGroup(dict_ref)) };
+            let subgrp_name = unsafe { cf_string_to_string(IOReportChannelGetSubGroup(dict_ref)) };
+            let unit = unsafe { cf_string_to_string(IOReportChannelGetUnitLabel(dict_ref)) };
 
             let state_count = unsafe { IOReportStateGetCount(dict_ref) };
             let mut states = Vec::new();
 
             for idx in 0..state_count {
-                let state_name = unsafe {
-                    CFString::wrap_under_get_rule(IOReportStateGetNameForIndex(dict_ref, idx))
-                }
-                .to_string();
+                let state_name =
+                    unsafe { cf_string_to_string(IOReportStateGetNameForIndex(dict_ref, idx)) };
 
                 let raw_residency = unsafe { IOReportStateGetResidency(dict_ref, idx) };
 
-                // Convert 24Mticks to microseconds (1 tick = 1/24 µs)
-                // For unknown units, use raw value as-is (still a time metric)
+                // Convert 24Mticks to microseconds
                 let residency = if unit.trim() == "24Mticks" {
                     raw_residency / 24
                 } else {
                     raw_residency
                 };
 
-                let upper_state = state_name.to_ascii_uppercase();
-                let is_active = !upper_state.contains("IDLE")
-                    && !upper_state.contains("OFF")
-                    && !upper_state.contains("DOWN");
+                let is_active = !contains_ignore_case(&state_name, "idle")
+                    && !contains_ignore_case(&state_name, "off")
+                    && !contains_ignore_case(&state_name, "down");
 
                 states.push(GPUState {
                     name: state_name,
