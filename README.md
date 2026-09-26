@@ -1,28 +1,25 @@
 # siligpu
 
-> 📊 A minimal Rust-based CLI tool for measuring Apple Silicon GPU usage in snapshot form using IOReport.
+> **siligpu** – Apple **SILI**con **GPU** measuring utility.
 
-`siligpu` queries the Apple Silicon GPU performance states and calculates the active usage percentage based on residency times. It's a low-level, fast, no-dependency snapshot tool for developers and power users.
+A CLI snapshot tool for Apple Silicon GPU usage via IOReport. Samples GPU residency over a given interval, computes active percentage, and exits – no continuous monitoring overhead. Does not require root privileges.
 
----
+Works on all Apple Silicon hardware (M-series and A-series). Tested on macOS 11 through macOS 27.
 
-## ✅ Features
+**Contents:**
 
-- 🔍 One-shot snapshot of GPU residency (not a live monitor)
-- 🍎 Designed for Apple Silicon Macs (M1, M2, M3, M4, M5…)
-- ⏱️ Customizable sampling interval with `-t, --time` (supports ms, s, m, h)
-- 📦 Uses low-level `IOReport` framework (no Metal dependency)
-- 🦀 Written in Rust
-- 🧩 Lightweight and fast
-- 📄 JSON output support for easy parsing
+- [Installation](#installation)
+- [Usage](#usage)
+- [Real-world usage](#real-world-usage)
+- [Compatibility](#compatibility)
+- [How to report issues](#how-to-report-issues)
+- [Security](#security)
+- [Contributing](#contributing)
+- [Licenses](#licenses)
 
----
-
-## 📦 Installation
+## Installation
 
 ### Homebrew
-
-Install via Homebrew:
 
 ```bash
 brew install jarpex/formulae/siligpu
@@ -30,15 +27,15 @@ brew install jarpex/formulae/siligpu
 
 ### From Source
 
+Requires a working Rust toolchain:
+
 ```bash
 git clone https://github.com/jarpex/siligpu.git
 cd siligpu
 cargo install --path .
 ```
 
----
-
-## 🚀 Usage
+## Usage
 
 ```bash
 siligpu [OPTIONS]
@@ -56,11 +53,9 @@ siligpu [OPTIONS]
 | `-h`, `--help`        | Print help information                                                                                |
 | `-V`, `--version`     | Print version information                                                                             |
 
-> **Time format examples:** `-t 500` (500ms), `-t 2s` (2 seconds), `--time 1m` (1 minute)
+> Time format examples: `-t 500` (500ms), `-t 2s` (2 seconds), `--time 1m` (1 minute)
 
----
-
-## 💡 Example
+### Usage examples
 
 ```bash
 # Default (1 second interval, verbose)
@@ -76,72 +71,123 @@ siligpu --time 2s -q
 siligpu --json
 ```
 
-### Example output (verbose)
+### Output examples
+
+**Verbose** (default):
 
 ```bash
-GPU Stats  / GPU Performance States
-     OFF:               993356 µs
-      P1:                 6256 µs
-      P2:                 2093 µs
-      P3:                 3296 µs
+GPU Stats / GPU Performance States
+     OFF:                776233 µs
+      P1:                216182 µs
+      P2:                  6208 µs
+      P3:                  6502 µs
+      P4:                     0 µs
+      P5:                  1733 µs
       ...
-    → Total active:      14420 µs (active)
-           → Total:    1007776 µs (total)
-           → Usage:       1.43 %
+   → Total active:       230625 µs (active)
+          → Total:      1006858 µs (total)
+          → Usage:        22.91 %
 ```
 
-### Example output (JSON)
+**Value-only** (`-q`):
+
+```bash
+22.91%
+```
+
+**Summary** (`-s`):
+
+```bash
+Usage:   1.64%
+```
+
+**JSON** (`-j`):
 
 ```json
 {
   "states": [
-    {
-      "name": "OFF",
-      "residency_micros": 993356,
-      "is_active": false
-    },
-    {
-      "name": "P1",
-      "residency_micros": 6256,
-      "is_active": true
-    },
-    {
-      "name": "P2",
-      "residency_micros": 2093,
-      "is_active": true
-    },
-    {
-      "name": "P3",
-      "residency_micros": 3296,
-      "is_active": true
-    },
-    {
-      "name": "P4",
-      "residency_micros": 2775,
-      "is_active": true
-    }
+    {"is_active": false, "name": "OFF", "residency_micros": 541002},
+    {"is_active": true, "name": "P1", "residency_micros": 301833},
+    ...
   ],
-  "total_active_micros": 14420,
-  "total_time_micros": 1007776,
-  "usage_percentage": 1.43
+  "total_active_micros": 462027,
+  "total_time_micros": 1003029,
+  "usage_percentage": 46.06
 }
 ```
 
----
+### Real-world usage
 
-## 📦 Requirements
+`siligpu` integrates perfectly with system fetch tools like [fastfetch](https://github.com/fastfetch-cli/fastfetch). The `-q` (value-only) flag combined with a short sampling interval provides clean numeric output ideal for status displays.
 
-- macOS (Big Sur 11.0 or later)
-- Apple Silicon (M1, M2, M3, M4, M5...)
+Configuration file: `~/.config/fastfetch/config.jsonc`:
 
-> On unsupported hardware (e.g., Intel Macs or older macOS versions), `siligpu` will exit with an error explaining that GPU performance states are unavailable instead of crashing.
-
----
-
-## 🧪 Testing
-
-```bash
-cargo test
+```json
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/master/doc/json_schema.json",
+  "modules": [
+    "os",
+    "kernel",
+    "terminal",
+    "cpu",
+    "gpu",
+    {
+      "type": "command",
+      "key": "GPU Usage",
+      "keyColor": "33",
+      "text": "siligpu -q -t 200ms"
+    },
+    "memory",
+    "break",
+    "colors"
+  ]
+}
 ```
 
-Tests cover the duration parser, GPU channel math, and error handling for invalid input.
+Will output something like:
+
+```
+~ ❯ fastfetch
+                     ..'          OS: macOS Golden Gate 27.0 (26A428) arm64
+                 ,xNMM.           Kernel: Darwin 27.0.0
+               .OMMMMo            Terminal: ghostty 1.3.1
+               lMM"               CPU: Apple M3 Pro (5+6) @ 4.06 GHz
+     .;loddo:.  .olloddol;.       GPU: Apple M3 Pro (14) @ 1.38 GHz [Integrated]
+   cKMMMMMMMMMMNWMMMMMMMMMM0:     GPU Usage: 2.51%
+ .KMMMMMMMMMMMMMMMMMMMMMMMWd.     Memory: 14.77 GiB / 18.00 GiB (82%)
+ XMMMMMMMMMMMMMMMMMMMMMMMX.
+;MMMMMMMMMMMMMMMMMMMMMMMM:
+:MMMMMMMMMMMMMMMMMMMMMMMM:
+.MMMMMMMMMMMMMMMMMMMMMMMMX.
+ kMMMMMMMMMMMMMMMMMMMMMMMMWd.
+ 'XMMMMMMMMMMMMMMMMMMMMMMMMMMk
+  'XMMMMMMMMMMMMMMMMMMMMMMMMK.
+    kMMMMMMMMMMMMMMMMMMMMMMd
+     ;KMMMMMMMWXXWMMMMMMMk.
+       "cooc*"    "*coo'"
+```
+
+## Compatibility
+
+Literally any Apple Silicon Mac:
+
+- macOS 11.0 (build 20A2411) or later
+- Apple Silicon hardware (M-series / A-series)
+
+> Note: On unsupported hardware or non-Apple Silicon environments, siligpu exits gracefully with an explicit error message instead of crashing.
+
+## How to report issues
+
+If you encounter any issues or bugs while using siligpu, please report them on the [GitHub Issues](https://github.com/jarpex/siligpu/issues) page.
+
+## Security
+
+Vulnerabilities should be reported privately in accordance with our [SECURITY.md](SECURITY.md) policy via [GitHub Security Advisories](https://github.com/jarpex/siligpu/security/advisories/new).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on submitting issues or pull requests.
+
+## Licenses
+
+See [LICENSE](LICENSE) and [THIRD_PARTY_LICENSES.html](THIRD_PARTY_LICENSES.html) for license information.
