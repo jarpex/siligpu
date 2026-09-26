@@ -64,9 +64,7 @@ impl fmt::Display for ParseDurationError {
         match self {
             Self::Empty => write!(f, "Duration string is empty"),
             Self::InvalidNumber => write!(f, "Invalid number in duration"),
-            Self::UnsupportedUnit(unit) => {
-                write!(f, "Unsupported duration unit: {unit}")
-            }
+            Self::UnsupportedUnit(unit) => write!(f, "Unsupported duration unit: {unit}"),
             Self::Overflow => write!(f, "Duration value is too large"),
         }
     }
@@ -75,20 +73,21 @@ impl fmt::Display for ParseDurationError {
 impl std::error::Error for ParseDurationError {}
 
 /// Parse strings like "100", "100ms", "1s", "1m", "1h" into a `Duration`.
-/// Accepts upper- or lower-case units and trims surrounding whitespace.
 pub fn parse_duration(s: &str) -> Result<Duration, ParseDurationError> {
-    let s = s.trim();
-    if s.is_empty() {
-        return Err(ParseDurationError::Empty);
+    fn strip_suffix_ignore_case<'a>(s: &'a str, suffix: &str) -> Option<&'a str> {
+        let split_at = s.len().checked_sub(suffix.len())?;
+        if s.is_char_boundary(split_at) && s[split_at..].eq_ignore_ascii_case(suffix) {
+            Some(&s[..split_at])
+        } else {
+            None
+        }
     }
 
-    let normalized = s.to_ascii_lowercase();
-
-    let parse_num = |num: &str| -> Result<u64, ParseDurationError> {
-        num.parse::<u64>().map_err(|e: std::num::ParseIntError| {
+    let parse_num = |num_str: &str| -> Result<u64, ParseDurationError> {
+        num_str.parse::<u64>().map_err(|e| {
             if matches!(
                 e.kind(),
-                &std::num::IntErrorKind::PosOverflow | &std::num::IntErrorKind::NegOverflow
+                std::num::IntErrorKind::PosOverflow | std::num::IntErrorKind::NegOverflow
             ) {
                 ParseDurationError::Overflow
             } else {
@@ -97,27 +96,31 @@ pub fn parse_duration(s: &str) -> Result<Duration, ParseDurationError> {
         })
     };
 
-    if let Some(num) = normalized.strip_suffix("ms") {
-        Ok(Duration::from_millis(parse_num(num)?))
-    } else if let Some(num) = normalized.strip_suffix('s') {
-        Ok(Duration::from_secs(parse_num(num)?))
-    } else if let Some(num) = normalized.strip_suffix('m') {
-        let secs = parse_num(num)?
-            .checked_mul(60)
-            .ok_or(ParseDurationError::Overflow)?;
-        Ok(Duration::from_secs(secs))
-    } else if let Some(num) = normalized.strip_suffix('h') {
-        let secs = parse_num(num)?
-            .checked_mul(3600)
-            .ok_or(ParseDurationError::Overflow)?;
-        Ok(Duration::from_secs(secs))
-    } else {
-        if normalized.chars().any(|c| c.is_ascii_alphabetic()) {
-            return Err(ParseDurationError::UnsupportedUnit(normalized));
-        }
-
-        Ok(Duration::from_millis(parse_num(&normalized)?))
+    let s = s.trim();
+    if s.is_empty() {
+        return Err(ParseDurationError::Empty);
     }
+
+    let (num_str, multiplier) = if let Some(n) = strip_suffix_ignore_case(s, "ms") {
+        (n, 1)
+    } else if let Some(n) = strip_suffix_ignore_case(s, "s") {
+        (n, 1000)
+    } else if let Some(n) = strip_suffix_ignore_case(s, "m") {
+        (n, 60_000)
+    } else if let Some(n) = strip_suffix_ignore_case(s, "h") {
+        (n, 3_600_000)
+    } else {
+        if s.chars().any(|c| c.is_ascii_alphabetic()) {
+            return Err(ParseDurationError::UnsupportedUnit(s.to_string()));
+        }
+        (s, 1)
+    };
+
+    let num = parse_num(num_str)?;
+    let millis = num
+        .checked_mul(multiplier)
+        .ok_or(ParseDurationError::Overflow)?;
+    Ok(Duration::from_millis(millis))
 }
 
 #[cfg(test)]
