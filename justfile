@@ -1,11 +1,26 @@
 default:
     @just --list
 
+build:
+    cargo build --release
+
 build-clean:
     ./scripts/build-clean.sh
 
-build:
-    cargo build --release
+test-props:
+    cargo test --lib proptests -- --nocapture
+
+fuzz-build:
+    cargo fuzz build
+
+fuzz-parse time="60":
+    cargo fuzz run fuzz_parse_duration -- -max_total_time={{time}}
+
+fmt:
+    cargo fmt
+
+fmt-check:
+    cargo fmt --check
 
 sbom:
     mkdir -p sbom
@@ -14,9 +29,12 @@ sbom:
     ./scripts/clean-sbom.sh sbom/bom.json
 
 secrets:
-    rm -f sbom/gitleaks.sarif
     mkdir -p sbom
     gitleaks detect --source . --report-format sarif --report-path sbom/gitleaks.sarif --no-git --log-level warn
+
+sast:
+    mkdir -p sbom
+    ./scripts/clippy-sarif.sh sbom/clippy.sarif
 
 audit-gate:
     cargo audit --deny warnings
@@ -25,23 +43,10 @@ audit-sarif:
     mkdir -p sbom
     cargo audit --format sarif > sbom/cargo-audit.sarif
 
-
 sca-general: sbom
-    mkdir -p sbom
     ./scripts/trivy-scan.sh sbom/bom.json sbom/trivy-vuln.sarif
 
-sast:
-    mkdir -p sbom
-    ./scripts/clippy-sarif.sh sbom/clippy.sarif
-
-scan: fmt-check audit-sarif audit-gate sca-general secrets sast
-
-fmt:
-    cargo fmt
-
-fmt-check:
-    cargo fmt --check
-
+scan: fmt-check audit-gate audit-sarif secrets sast sca-general
 
 licenses:
     cargo about generate about.hbs -o THIRD_PARTY_LICENSES.html
@@ -72,16 +77,7 @@ vex-merge:
 vex-list:
     @ls -1 vex/statements/*.vex.json 2>/dev/null || echo "No VEX documents found"
 
-test-props:
-    cargo test --lib proptests -- --nocapture
-
-fuzz-parse time="60":
-    cargo fuzz run fuzz_parse_duration -- -max_total_time={{time}}
-
-fuzz-build:
-    cargo fuzz build
-
-install-man: man
+install-man:
     #!/usr/bin/env bash
     MAN_DIR="${HOME}/.local/share/man/man1"
     mkdir -p "${MAN_DIR}"
