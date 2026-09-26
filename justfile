@@ -80,3 +80,10 @@ fuzz-parse time="60":
 
 fuzz-build:
     cargo fuzz build
+
+install-man: man
+    #!/usr/bin/env bash
+    MAN_DIR="${HOME}/.local/share/man/man1"
+    mkdir -p "${MAN_DIR}"
+    cp man/siligpu.1 "${MAN_DIR}/"
+    echo "Installed man page to ${MAN_DIR}"

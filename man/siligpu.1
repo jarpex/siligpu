@@ -1,0 +1,153 @@
+.TH SILIGPU 1 "September 2026" "siligpu 1.0.0" "General Commands Manual"
+
+.SH NAME
+siligpu \- Apple Silicon GPU Usage Display Utility for macOS
+
+.SH SYNOPSIS
+.B siligpu
+.RI [ OPTIONS ]
+
+.SH DESCRIPTION
+.B siligpu
+is a CLI snapshot tool for Apple Silicon GPU usage via
+.IR IOReport .
+It samples GPU residency over a given interval, computes active percentage,
+and exits — no continuous monitoring overhead. Does not require root privileges.
+
+.SH OPTIONS
+.TP
+.BR \-v ", " \-\-verbose
+Verbose mode (default).
+Show detailed performance states.
+.TP
+.BR \-s ", " \-\-summary
+Summary mode.
+Show one-line summary (e.g.,
+.IR "Usage: 10.25%" ).
+.TP
+.BR \-q ", " \-\-value\-only
+Quiet mode.
+Output only the numeric value (e.g.,
+.IR "12.34%" ).
+Ideal for scripts and status bars.
+.TP
+.BR \-j ", " \-\-json
+JSON mode.
+Output results in JSON format.
+.TP
+.BR \-t ", " \-\-time " \fITIME\fR"
+Time between samples.
+Accepts plain numbers (milliseconds) or units:
+.BR ms ,
+.BR s ,
+.BR m ,
+.BR h .
+Defaults to
+.IR 1000ms .
+.TP
+.BR \-h ", " \-\-help
+Print help information.
+.TP
+.BR \-V ", " \-\-version
+Print version information.
+
+.SH EXAMPLES
+.TP
+.B siligpu
+Default (1 second interval, verbose output).
+.TP
+.B siligpu \-t 500 \-s
+500 ms interval, summary mode.
+.TP
+.B siligpu \-\-time 2s \-q
+2-second interval, value-only output.
+.TP
+.B siligpu \-\-json
+JSON output.
+
+.SH OUTPUT MODES
+.SS "Verbose (default)"
+.EX
+GPU Stats / GPU Performance States
+     OFF:                 776233 µs
+      P1:                 216182 µs
+      P2:                   6208 µs
+   → Total active:        230625 µs (active)
+          → Total:       1006858 µs (total)
+          → Usage:         22.91 %
+.EE
+
+.SS "Value-only (-q)"
+.EX
+22.91%
+.EE
+
+.SS "Summary (-s)"
+.EX
+Usage: 1.64%
+.EE
+
+.SS "JSON (-j)"
+.EX
+{
+  "usage_percentage": 46.06,
+  "total_active_micros": 462027,
+  "total_time_micros": 1003029,
+  "states": [
+    {"is_active": false, "name": "OFF", "residency_micros": 541002},
+    {"is_active": true,  "name": "P1",  "residency_micros": 301833}
+  ]
+}
+.EE
+
+
+.SH INTEGRATION
+.B siligpu
+integrates perfectly with system fetch tools like
+.IR fastfetch .
+The
+.B \-q
+(value-only) flag combined with a short sampling interval provides clean
+numeric output ideal for status displays.
+.PP
+Example
+.I ~/.config/fastfetch/config.jsonc
+configuration:
+.EX
+{
+  "modules": [
+    "os", "kernel", "terminal", "cpu", "gpu",
+    {
+      "type": "command",
+      "key": "GPU Usage",
+      "text": "siligpu -q -t 200ms"
+    }
+  ]
+}
+.EE
+
+.SH "REPORTING ISSUES"
+.UR https://github.com/jarpex/siligpu/issues
+Report bugs at:
+.UE .
+.PP
+Security issues (private):
+.UR https://github.com/jarpex/siligpu/security/advisories/new
+GitHub Security Advisories
+.UE .
+
+.SH "SEE ALSO"
+.BR fastfetch (1),
+.BR powermetrics (8)
+
+.SH LICENSE
+See
+.I LICENSE
+and
+.I THIRD_PARTY_LICENSES.html
+for license information.
+
+.SH AUTHORS
+Anastasia Shebalkina <jarpex>
+.UR https://github.com/jarpex
+.UE .
