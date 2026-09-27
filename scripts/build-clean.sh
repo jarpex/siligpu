@@ -5,6 +5,7 @@ PROJECT_NAME="siligpu"
 TARGET_DIR="target/release"
 RELEASE_DIR="$TARGET_DIR"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 SANDBOX_PREFIX="/tmp/siligpu-sandbox"
 
 log() {
@@ -66,7 +67,7 @@ select_remap_flag() {
 
 copy_workspace_to_sandbox() {
     local sandbox_dir="$1"
-    rsync -a --delete --exclude target --exclude release --exclude .git "$SCRIPT_DIR/" "$sandbox_dir/"
+    rsync -a --delete --exclude target --exclude .git "$PROJECT_ROOT/" "$sandbox_dir/"
 }
 
 run_sandboxed_build() {
@@ -104,8 +105,8 @@ run_sandboxed_build() {
         env "${env_vars[@]}" "$LLVM_OBJCOPY" --strip-all "target/release/$PROJECT_NAME"
     )
 
-    mkdir -p "$SCRIPT_DIR/$RELEASE_DIR"
-    cp "$sandbox_dir/$TARGET_DIR/$PROJECT_NAME" "$SCRIPT_DIR/$RELEASE_DIR/$PROJECT_NAME"
+    mkdir -p "$PROJECT_ROOT/$RELEASE_DIR"
+    cp "$sandbox_dir/$TARGET_DIR/$PROJECT_NAME" "$PROJECT_ROOT/$RELEASE_DIR/$PROJECT_NAME"
 
     trap - EXIT
     cleanup_sandbox
@@ -136,7 +137,7 @@ main() {
 
     run_sandboxed_build
 
-    STRIPPED_BIN="$SCRIPT_DIR/$RELEASE_DIR/$PROJECT_NAME"
+    STRIPPED_BIN="$PROJECT_ROOT/$RELEASE_DIR/$PROJECT_NAME"
     verify_clean "$STRIPPED_BIN"
 
     log "Clean binary is available in $RELEASE_DIR"
